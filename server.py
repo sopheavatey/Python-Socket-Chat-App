@@ -1,62 +1,7 @@
-# import threading
-# import socket
-
-# PORT = 5050
-# SERVER = "localhost"
-# ADDR = (SERVER, PORT)
-# FORMAT = "utf-8"
-# DISCONNECT_MESSAGE = "!DISCONNECT"
-
-# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# server.bind(ADDR)
-
-# clients = set()
-# clients_lock = threading.Lock()
-
-
-# def handle_client(conn, addr):
-#     print(f"[NEW CONNECTION] {addr} Connected")
-
-#     try:
-#         connected = True
-#         while connected:
-#             msg = conn.recv(1024).decode(FORMAT)
-#             if not msg:
-#                 break
-
-#             if msg == DISCONNECT_MESSAGE:
-#                 connected = False
-
-#             print(f"[{addr}] {msg}")
-#             with clients_lock:
-#                 for c in clients:
-#                     c.sendall(f"[{addr}] {msg}".encode(FORMAT))
-
-#     finally:
-#         with clients_lock:
-#             clients.remove(conn)
-
-#         conn.close()
-
-
-# def start():
-#     print('[SERVER STARTED]!')
-#     server.listen()
-#     while True:
-#         conn, addr = server.accept()
-#         with clients_lock:
-#             clients.add(conn)
-#         thread = threading.Thread(target=handle_client, args=(conn, addr))
-#         thread.start()
-
-
-# start()
-
-
-# server.py
 import threading
 import socket
 
+# socket setup
 PORT = 5050
 SERVER = "localhost"
 ADDR = (SERVER, PORT)
@@ -66,25 +11,30 @@ DISCONNECT_MESSAGE = "!DISCONNECT"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 
-clients = {}
+clients = {} #create a dictionary instead of set
 clients_lock = threading.Lock()
 
-def broadcast(message):
-    """Broadcast a message to all clients."""
+# Newly added function to for server to broadcast all clients
+def broadcast(message, sender_addr=None):
+    if sender_addr:
+        formatted_message = f"[{sender_addr}]: {message}"
+    else:
+        formatted_message = f"[SERVER]: {message}"
+
     with clients_lock:
         for client in clients.values():
-            client.sendall(f"[SERVER]: {message}".encode(FORMAT))
+            client.sendall(formatted_message.encode(FORMAT))
 
+# function for sending message to a particular client
 def send_to_client(addr, message):
-    """Send a message to a specific client by its address."""
     with clients_lock:
         if addr in clients:
             clients[addr].sendall(f"[SERVER]: {message}".encode(FORMAT))
         else:
             print(f"[ERROR]: No client with address {addr} connected.")
 
+
 def handle_client(conn, addr):
-    """Handle communication with a connected client."""
     print(f"[NEW CONNECTION] {addr} connected.")
 
     try:
@@ -98,19 +48,21 @@ def handle_client(conn, addr):
                 connected = False
 
             print(f"[{addr}] {msg}")
-            broadcast(f"[{addr}] {msg}")
+            broadcast(msg, sender_addr=addr)
 
     except ConnectionResetError:
         print(f"[ERROR] Connection with {addr} lost.")
     
     finally:
         with clients_lock:
-            del clients[addr]
+            if addr in clients:  # Check if the address exists in clients
+                del clients[addr]  # Only delete if it exists
         conn.close()
         print(f"[DISCONNECTED] {addr} disconnected.")
 
+
+# function that allow server to send message to client
 def start_server_broadcast():
-    """Allow the server to send messages to all or specific clients."""
     while True:
         message = input("[SERVER MESSAGE] Enter message or 'q' to quit: ")
         if message.lower() == 'q':
@@ -124,19 +76,18 @@ def start_server_broadcast():
             send_to_client(recipient, message)
 
 def start():
-    """Start the server and handle clients in separate threads."""
     print("[SERVER STARTED]")
     server.listen()
-    threading.Thread(target=start_server_broadcast).start()
+    threading.Thread(target=start_server_broadcast).start() #use to run the start_server_broadcast function in a separate thread
 
     while True:
         conn, addr = server.accept()
+        print(f"[NEW CONNECTION] {addr} connected.")
         with clients_lock:
             clients[str(addr)] = conn
+            print(f"[CLIENT ADDED] Current clients: {list(clients.keys())}")  # Log current clients
         thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
 
 if __name__ == "__main__":
     start()
-
-

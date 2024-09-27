@@ -1,47 +1,5 @@
-# import socket
-# import time
-
-# PORT = 5050
-# SERVER = "localhost"
-# ADDR = (SERVER, PORT)
-# FORMAT = "utf-8"
-# DISCONNECT_MESSAGE = "!DISCONNECT"
-
-
-# def connect():
-#     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#     client.connect(ADDR)
-#     return client
-
-
-# def send(client, msg):
-#     message = msg.encode(FORMAT)
-#     client.send(message)
-
-
-# def start():
-#     answer = input('Would you like to connect (yes/no)? ')
-#     if answer.lower() != 'yes':
-#         return
-
-#     connection = connect()
-#     while True:
-#         msg = input("Message (q for quit): ")
-
-#         if msg == 'q':
-#             break
-
-#         send(connection, msg)
-
-#     send(connection, DISCONNECT_MESSAGE)
-#     time.sleep(1)
-#     print('Disconnected')
-
-
-# start()
-
-# client.py
 import socket
+import time
 import threading
 
 PORT = 5050
@@ -50,47 +8,49 @@ ADDR = (SERVER, PORT)
 FORMAT = "utf-8"
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
+
 def connect():
-    """Establish a connection to the server."""
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
     return client
 
-def receive_messages(client):
-    """Listen for incoming messages from the server or other clients."""
+
+def send(client, msg):
+    message = msg.encode(FORMAT)
+    client.send(message)
+
+# newly added function to recieve the message from server or other client
+def receive_messages(connection):
     while True:
         try:
-            msg = client.recv(1024).decode(FORMAT)
+            msg = connection.recv(1024).decode(FORMAT)
             if msg:
-                print(msg)
-        except ConnectionResetError:
-            print("Connection lost from server.")
+                # Print the received message without adding an extra newline
+                print(f"{msg}\n", end="")  # Use end="" to avoid an extra newline
+                # Print the input prompt on the same line
+                print("Message (q for quit): ", end='', flush=True)
+        except Exception as e:
+            print(f"[ERROR] {e}")
             break
 
-def send_messages(client):
-    """Send messages to the server."""
+def start():
+    answer = input('Would you like to connect (yes/no)? ')
+    if answer.lower() != 'yes':
+        return
+
+    connection = connect()
+    threading.Thread(target=receive_messages, args=(connection,)).start()  # Start receiving messages
+
     while True:
         msg = input("Message (q for quit): ")
         if msg == 'q':
-            client.send(DISCONNECT_MESSAGE.encode(FORMAT))
             break
-        client.send(msg.encode(FORMAT))
 
-def start():
-    """Start the client and initiate message sending and receiving."""
-    connection = connect()
+        send(connection, msg)
 
-    # Create a thread to listen for messages from the server
-    receive_thread = threading.Thread(target=receive_messages, args=(connection,))
-    receive_thread.start()
-
-    # In the main thread, send messages to the server
-    send_messages(connection)
-    receive_thread.join()
-
-    connection.close()
+    send(connection, DISCONNECT_MESSAGE)
+    time.sleep(1)
     print('Disconnected')
 
-if __name__ == "__main__":
-    start()
 
+start()
