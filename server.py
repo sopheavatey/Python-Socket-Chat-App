@@ -1,7 +1,8 @@
 import threading
 import socket
+from datetime import datetime
 
-# socket setup
+# Server setup
 PORT = 5050
 SERVER = "localhost"
 ADDR = (SERVER, PORT)
@@ -11,83 +12,91 @@ DISCONNECT_MESSAGE = "!DISCONNECT"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 
-clients = {} #create a dictionary instead of set
+clients = {}
+usernames = set()
 clients_lock = threading.Lock()
+message_log = []  # To store all messages sent in the chat
 
-# Newly added function to for server to broadcast all clients
-def broadcast(message, sender_addr=None):
-    if sender_addr:
-        formatted_message = f"[{sender_addr}]: {message}"
+# Broadcast a message to all connected clients, except the one that sent it.
+def broadcast(message, sender_name=None, exclude_client=None):
+ 
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if sender_name:
+        formatted_message = f"\n[{timestamp}] {sender_name}: {message}"
     else:
-        formatted_message = f"[SERVER]: {message}"
+        formatted_message = f"\n[{timestamp}] {message}"
 
     with clients_lock:
-        for client in clients.values():
-            client.sendall(formatted_message.encode(FORMAT))
+        for client, client_conn in clients.items():
+            if client_conn != exclude_client:  # Skip sending the message back to the sender
+                try:
+                    client_conn.sendall(formatted_message.encode(FORMAT))
+                except Exception as e:
+                    print(f"[ERROR] Failed to send message to client: {e}")
 
-# function for sending message to a particular client
-def send_to_client(addr, message):
-    with clients_lock:
-        if addr in clients:
-            clients[addr].sendall(f"[SERVER]: {message}".encode(FORMAT))
-        else:
-            print(f"[ERROR]: No client with address {addr} connected.")
-
-
+# Handle communication with a connected client.
 def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
-
+    """Handle communication with a connected client."""
+    print(f"\n[NEW CONNECTION] {addr} connected.")
+    
     try:
+        # Receive username and ensure it's unique
+        username = conn.recv(1024).decode(FORMAT)
+        if username in usernames:
+            conn.sendall("Username already taken. Disconnecting.".encode(FORMAT))
+            conn.close()
+            return
+
+        with clients_lock:
+            clients[addr] = conn
+            usernames.add(username)
+
+        # Announce to the client that they joined
+        conn.sendall("You joined the server.".encode(FORMAT))
+        
+        # Announce to everyone else that this user has joined
+        broadcast(f"{username} has joined the chat!", exclude_client=conn)
+
         connected = True
         while connected:
             msg = conn.recv(1024).decode(FORMAT)
-            if not msg:
-                break
-
             if msg == DISCONNECT_MESSAGE:
                 connected = False
+                broadcast(f"\n{username} has left the chat.", exclude_client=conn)
+                break
+            elif msg:
+                # Log the message
+                message_log.append(f"{username}: {msg}")
+                
+                # Broadcast the message to other clients
+                broadcast(msg, sender_name=username)
 
-            print(f"[{addr}] {msg}")
-            broadcast(msg, sender_addr=addr)
-
-    except ConnectionResetError:
-        print(f"[ERROR] Connection with {addr} lost.")
+    except Exception as e:
+        print(f"[ERROR] {addr} encountered an issue: {e}")
     
     finally:
         with clients_lock:
-            if addr in clients:  # Check if the address exists in clients
-                del clients[addr]  # Only delete if it exists
+            if addr in clients:
+                del clients[addr]
+                usernames.remove(username)
         conn.close()
-        print(f"[DISCONNECTED] {addr} disconnected.")
+        print(f"\n[DISCONNECTED] {addr} disconnected.")
 
-
-# function that allow server to send message to client
-def start_server_broadcast():
-    while True:
-        message = input("[SERVER MESSAGE] Enter message or 'q' to quit: ")
-        if message.lower() == 'q':
-            print("Server shutting down message broadcast.")
-            break
-
-        recipient = input("[SERVER MESSAGE] Send to (all/client address): ")
-        if recipient.lower() == "all":
-            broadcast(message)
-        else:
-            send_to_client(recipient, message)
-
+# Start the server and handle incoming connections.
 def start():
     print("[SERVER STARTED]")
     server.listen()
-    threading.Thread(target=start_server_broadcast).start() #use to run the start_server_broadcast function in a separate thread
 
-    while True:
-        conn, addr = server.accept()
-        print(f"[NEW CONNECTION] {addr} connected.\n")
-        with clients_lock:
-            clients[str(addr)] = conn
-            print(f"[CLIENT ADDED] Current clients: {list(clients.keys())}")  # Log current clients
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
-        thread.start()
+    try:
+        while True:
+            conn, addr = server.accept()
+            thread = threading.Thread(target=handle_client, args=(conn, addr))
+            thread.start()
+            print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+    except KeyboardInterrupt:
+        print("\n[SERVER SHUTTING DOWN]")
+    finally:
+        server.close()
 
 if __name__ == "__main__":
     start()
