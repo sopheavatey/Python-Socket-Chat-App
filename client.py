@@ -1,7 +1,6 @@
 import socket
 import threading
 import sys
-from datetime import datetime
 
 PORT = 5050
 SERVER = "localhost"
@@ -9,20 +8,20 @@ ADDR = (SERVER, PORT)
 FORMAT = "utf-8"
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
-# Establish a connection to the server.
+# Establish a connection to the server
 def connect():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
     return client
 
-# Send a message to the server.
+# Send a message to the server
 def send(client, msg):
     try:
         client.send(msg.encode(FORMAT))
     except Exception as e:
         print(f"[ERROR] Could not send message: {e}")
 
-# Receive and print messages from the server.
+# Receive and display messages from the server
 def receive_messages(connection):
     while True:
         try:
@@ -35,14 +34,8 @@ def receive_messages(connection):
             print(f"[ERROR] {e}")
             break
 
-# def format_message(raw_message):
-#     """Custom formatting for messages."""
-#     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-#     return f"[{current_time}] {raw_message}"
-
-# Start the client and handle user input.
+# Start the client and handle user input
 def start():
-    # Ask the user if they want to connect
     answer = input("\nWould you like to connect to the server (yes/no)? ")
     if answer.lower() != 'yes':
         print("Connection aborted.")
@@ -50,11 +43,12 @@ def start():
 
     connection = connect()
 
-    # Prompt for username and send it to the server
     username = input("\nEnter your username: ")
     send(connection, username)
 
-    # Start a thread to receive messages
+    user_email = input("\nEnter your email address: ")
+    send(connection, user_email)
+
     threading.Thread(target=receive_messages, args=(connection,)).start()
 
     while True:
