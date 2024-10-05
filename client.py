@@ -25,9 +25,7 @@ def receive_messages(connection):
         try:
             msg = connection.recv(1024).decode(FORMAT)
             if msg:
-                # Print the received message without adding an extra newline
                 print(f"{msg}\n", end="")  # Use end="" to avoid an extra newline
-                # Print the input prompt on the same line
                 print("Message (q for quit): ", end='', flush=True)
         except Exception as e:
             print(f"[ERROR] {e}")

@@ -82,7 +82,7 @@ def start():
 
     while True:
         conn, addr = server.accept()
-        print(f"[NEW CONNECTION] {addr} connected.")
+        print(f"[NEW CONNECTION] {addr} connected.\n")
         with clients_lock:
             clients[str(addr)] = conn
             print(f"[CLIENT ADDED] Current clients: {list(clients.keys())}")  # Log current clients
